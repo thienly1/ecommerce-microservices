@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # User Service Database
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: lytathi
+      POSTGRES_PASSWORD: Ly135246
+    ports:
+      - "5435:5432"
+    volumes:
+      - user_data:/var/lib/postgresql/data
+    networks:
+      - ecommerce-network
+
+  # Product Service Database
+  product-db:
+    image: postgres:16-alpine
+    container_name: product-db
+    environment:
+      POSTGRES_DB: product_db
+      POSTGRES_USER: lytathi
+      POSTGRES_PASSWORD: Ly135246
+    ports:
+      - "5433:5432"
+    volumes:
+      - product_data:/var/lib/postgresql/data
+    networks:
+      - ecommerce-network
+
+  # Order Service Database
+  order-db:
+    image: postgres:16-alpine
+    container_name: order-db
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: lytathi
+      POSTGRES_PASSWORD: Ly135246
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_data:/var/lib/postgresql/data
+    networks:
+      - ecommerce-network
+
+volumes:
+  user_data:
+  product_data:
+  order_data:
+
+networks:
+  ecommerce-network:
+    driver: bridge
