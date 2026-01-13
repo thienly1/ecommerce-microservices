@@ -17,8 +17,10 @@ public class ProductServiceClient {
 
     private final WebClient webClient;
 
-    public ProductServiceClient(@Qualifier("productWebClient") WebClient webClient) {  // Changed here
-        this.webClient = webClient;
+    public ProductServiceClient(WebClient.Builder webClientBuilder) {
+        this.webClient = webClientBuilder
+                .baseUrl("http://product-service")  // Service name from Eureka
+                .build();
     }
 
     public ProductResponse getProductById(Long productId) {

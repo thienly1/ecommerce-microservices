@@ -15,8 +15,10 @@ public class UserServiceClient {
 
     private final WebClient webClient;
 
-    public UserServiceClient(@Qualifier("userWebClient") WebClient webClient) {  // Changed here
-        this.webClient = webClient;
+    public UserServiceClient(WebClient.Builder webClientBuilder) {
+        this.webClient = webClientBuilder
+                .baseUrl("http://user-service")  // Service name from Eureka
+                .build();
     }
 
     public UserResponse getUserById(Long userId) {

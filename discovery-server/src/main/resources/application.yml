@@ -1,0 +1,16 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-server
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false  # Disable eureka client
+    fetch-registry: false        # It is the registry, no need to fetch
+  server:
+    enable-self-preservation: false  # Disable for development (enable in production)
+    eviction-interval-timer-in-ms: 5000  # Faster cleanup in development

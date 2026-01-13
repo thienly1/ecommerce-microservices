@@ -20,6 +20,14 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+# Eureka Client Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/  # Eureka server URL
+  instance:
+    prefer-ip-address: true  # Register with IP instead of hostname
+
 # Actuator endpoints
 management:
   endpoints:
