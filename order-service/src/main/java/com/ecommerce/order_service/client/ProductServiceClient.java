@@ -2,8 +2,10 @@ package com.ecommerce.order_service.client;
 
 import com.ecommerce.order_service.dto.external.ProductResponse;
 import com.ecommerce.order_service.exception.ServiceException;
+import com.ecommerce.order_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -19,10 +21,12 @@ public class ProductServiceClient {
 
     public ProductServiceClient(WebClient.Builder webClientBuilder) {
         this.webClient = webClientBuilder
-                .baseUrl("http://product-service")  // Service name from Eureka
+                .baseUrl("http://PRODUCT-SERVICE")
                 .build();
     }
 
+    @CircuitBreaker(name = "productService", fallbackMethod = "getProductByIdFallback")
+    @Retry(name = "productService")
     public ProductResponse getProductById(Long productId) {
         log.info("Fetching product with id: {} from product-service", productId);
 
@@ -37,25 +41,24 @@ public class ProductServiceClient {
                 .block();
     }
 
+    @CircuitBreaker(name = "productService", fallbackMethod = "isInStockFallback")
+    @Retry(name = "productService")
     public boolean isInStock(Long productId, int quantity) {
         log.info("Checking stock for product: {}, quantity: {}", productId, quantity);
 
-        try {
-            Boolean inStock = webClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/api/products/{id}/in-stock")
-                            .queryParam("quantity", quantity)
-                            .build(productId))
-                    .retrieve()
-                    .bodyToMono(Boolean.class)
-                    .block();
-            return Boolean.TRUE.equals(inStock);
-        } catch (Exception e) {
-            log.error("Error checking stock: {}", e.getMessage());
-            return false;
-        }
+        Boolean inStock = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/products/{id}/in-stock")
+                        .queryParam("quantity", quantity)
+                        .build(productId))
+                .retrieve()
+                .bodyToMono(Boolean.class)
+                .block();
+        return Boolean.TRUE.equals(inStock);
     }
 
+    @CircuitBreaker(name = "productService", fallbackMethod = "reduceStockFallback")
+    @Retry(name = "productService")
     public void reduceStock(Long productId, int quantity) {
         log.info("Reducing stock for product: {}, quantity: {}", productId, quantity);
 
@@ -64,8 +67,29 @@ public class ProductServiceClient {
                 .bodyValue(Map.of("quantity", quantity))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
-                        Mono.error(new ServiceException("Failed to reduce stock for product: " + productId)))
+                        Mono.error(new ServiceException("Failed to reduce stock")))
                 .bodyToMono(Void.class)
                 .block();
+    }
+
+    // FALLBACK METHODS
+    // Throw ServiceUnavailableException instead of returning default values
+
+    public ProductResponse getProductByIdFallback(Long productId, Throwable throwable) {
+        log.error("CIRCUIT BREAKER OPEN: Cannot get product {}. Error: {}",
+                productId, throwable.getMessage());
+        throw new ServiceUnavailableException("Product Service is unavailable. Please try again later.");
+    }
+
+    public boolean isInStockFallback(Long productId, int quantity, Throwable throwable) {
+        log.error("CIRCUIT BREAKER OPEN: Cannot check stock for product {}. Error: {}",
+                productId, throwable.getMessage());
+        throw new ServiceUnavailableException("Product Service is unavailable. Please try again later.");
+    }
+
+    public void reduceStockFallback(Long productId, int quantity, Throwable throwable) {
+        log.error("CIRCUIT BREAKER OPEN: Cannot reduce stock for product {}. Error: {}",
+                productId, throwable.getMessage());
+        throw new ServiceUnavailableException("Product Service is unavailable. Please try again later.");
     }
 }

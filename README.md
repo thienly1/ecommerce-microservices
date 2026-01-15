@@ -83,11 +83,67 @@
         5. Order Service     (port 8083)
         6. API Gateway       (port 8080)  ← LAST
 
-    
 
+##  Circuit Breaker (Resilience4j)
+    - Circuit Breaker - Handle service failures gracefully
+    - Retry - Automatically retry failed requests
+    - Fallback - Return default response when service is down
+### Add Dependencies to Order Service 
+    - This service need to comunicate with User service and product service to get data
+    - 2 dependencies need to be added:
+        <!-- Resilience4j -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+        </dependency>
+        <!-- AOP for annotations -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+### Add Resilience4j Configuration to order-service.yml file on gitHub ecommerce-config
+    - Add Resilience4j Configuration to order-service.yml file
+    - Also add circuit breaker to Actuator configuration in that yml file.
+### Reimplement UserServiceClient and ProductServiceClient to integrate circuit breaker
+    - Reimplement UserServiceClient and ProductServiceClient to integrate circuit breaker
+    - Create new exception class: ServiceUnavailableException to handle fallback methods in both classes above then add it to GlobalExceptionHandler
+### Test the Circuit Breaker
+    - Restart all the services in the project with right order
+    - Create new user, product, order by http://localhost:8080/api/* => should work!
+    - check the http://localhost:8083/actuator/health. See all the services are up, circuit breaker is closed
+    - Stop Product Service or User Service
+    - Try creating new order: http://localhost:8080/api/orders around 3-5 times. It should have reponse status:500- Product is unavailable
+    - Check the http://localhost:8083/actuator/health again => Get circuit Breaker status: HALF-OPEN
+    - Try more than 10 times to create orders, the status should be: OPEN
 
+## Distributed Tracing with Zipkin
+    - When a request flows through multiple services, it's hard to debug. 
+    - Zipkin solves this by:  Assigning a unique Trace ID to each request
+                              Tracking time spent in each service        
+                              Showing the complete request flow visually    
+    1. Start Zipkin Server with Docker
+    - docker run -d -p 9411:9411 --name zipkin openzipkin/zipkin or add zipin configuration to docker-compose.yml:
+     zipkin:
+         image: openzipkin/zipkin
+         container_name: zipkin
+         ports:
+           - "9411:9411"
+    2. Add Dependencies(ZipKin) to All Services
+    - Add these dependencies to ALL services (api-gateway, user-service, product-service, order-service)
+    3. Update the config files in GitHub (ecommerce-config repo): application.yml with tracing point and Zipkin configuration
+    4. Restart All Services with right order:                                                                   
+        Zipkin (port 9411)                                                                       
+        Discovery Server (port 8761)                                                                       
+        Config Server (port 8888)
+        User Service (port 8081)
+        Product Service (port 8082) 
+        Order Service (port 8083)
+        API Gateway (port 8080)
+    5. Test Distributed Tracing
+        - Make some requests
+        - open http://localhost:9411
+        - click RUN QUERY or choose serviceName or ...
 
-    
 
 
 

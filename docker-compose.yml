@@ -45,7 +45,11 @@ services:
       - order_data:/var/lib/postgresql/data
     networks:
       - ecommerce-network
-
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
 volumes:
   user_data:
   product_data:

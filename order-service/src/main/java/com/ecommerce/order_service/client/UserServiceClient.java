@@ -2,8 +2,10 @@ package com.ecommerce.order_service.client;
 
 import com.ecommerce.order_service.dto.external.UserResponse;
 import com.ecommerce.order_service.exception.ServiceException;
+import com.ecommerce.order_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -17,10 +19,12 @@ public class UserServiceClient {
 
     public UserServiceClient(WebClient.Builder webClientBuilder) {
         this.webClient = webClientBuilder
-                .baseUrl("http://user-service")  // Service name from Eureka
+                .baseUrl("http://USER-SERVICE")
                 .build();
     }
 
+    @CircuitBreaker(name = "userService", fallbackMethod = "getUserByIdFallback")
+    @Retry(name = "userService")
     public UserResponse getUserById(Long userId) {
         log.info("Fetching user with id: {} from user-service", userId);
 
@@ -35,19 +39,28 @@ public class UserServiceClient {
                 .block();
     }
 
+    @CircuitBreaker(name = "userService", fallbackMethod = "userExistsFallback")
+    @Retry(name = "userService")
     public boolean userExists(Long userId) {
         log.info("Checking if user exists: {}", userId);
 
-        try {
-            Boolean exists = webClient.get()
-                    .uri("/api/users/{id}/exists", userId)
-                    .retrieve()
-                    .bodyToMono(Boolean.class)
-                    .block();
-            return Boolean.TRUE.equals(exists);
-        } catch (Exception e) {
-            log.error("Error checking user existence: {}", e.getMessage());
-            return false;
-        }
+        Boolean exists = webClient.get()
+                .uri("/api/users/{id}/exists", userId)
+                .retrieve()
+                .bodyToMono(Boolean.class)
+                .block();
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public UserResponse getUserByIdFallback(Long userId, Throwable throwable) {
+        log.error("CIRCUIT BREAKER OPEN: Cannot get user {}. Error: {}",
+                userId, throwable.getMessage());
+        throw new ServiceUnavailableException("User Service is unavailable. Please try again later.");
+    }
+
+    public boolean userExistsFallback(Long userId, Throwable throwable) {
+        log.error("CIRCUIT BREAKER OPEN: Cannot verify user {}. Error: {}",
+                userId, throwable.getMessage());
+        throw new ServiceUnavailableException("User Service is unavailable. Please try again later.");
     }
 }
