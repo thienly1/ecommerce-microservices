@@ -50,6 +50,18 @@ services:
     container_name: zipkin
     ports:
       - "9411:9411"
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - "8180:8080"
+    networks:
+      - ecommerce-network
+
 volumes:
   user_data:
   product_data:
