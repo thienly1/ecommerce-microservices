@@ -31,7 +31,7 @@ public class WebClientConfig {
                         .addHandlerLast(new WriteTimeoutHandler(3, TimeUnit.SECONDS))
                 );
         return WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient));
+                .clientConnector(new ReactorClientHttpConnector(httpClient)).filter(addJwtToken());
     }
 
     //Filter to propagate JWT token to downstream services
