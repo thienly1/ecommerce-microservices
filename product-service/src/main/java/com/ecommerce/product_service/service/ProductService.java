@@ -1,5 +1,6 @@
 package com.ecommerce.product_service.service;
 
+import com.ecommerce.product_service.client.OrderServiceClient;
 import com.ecommerce.product_service.dto.ProductRequest;
 import com.ecommerce.product_service.dto.ProductResponse;
 import com.ecommerce.product_service.entity.Product;
@@ -20,6 +21,7 @@ import java.util.List;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final OrderServiceClient orderServiceClient;
 
     public ProductResponse createProduct(ProductRequest request) {
         log.info("Creating product with SKU: {}", request.getSkuCode());
@@ -102,8 +104,17 @@ public class ProductService {
     public void deleteProduct(Long id) {
         log.info("Deleting product with id: {}", id);
 
-        if (!productRepository.existsById(id)) {
-            throw new ProductNotFoundException(id);
+        if (isInStock(id, 1)){
+            throw new IllegalStateException(
+                    "Cannot delete product with ID " + id +
+                            ". Product still has units in stock. " +
+                            "Please reduce stock to 0 before deletion.");
+        }
+        if (orderServiceClient.hasActiveOrdersForProduct(id)) {
+            throw new IllegalStateException(
+                    "Cannot delete product with ID " + id +
+                            ". Product is in active orders (PENDING, CONFIRMED, PROCESSING, or SHIPPED). " +
+                            "Please wait until all orders are DELIVERED or CANCELLED.");
         }
 
         productRepository.deleteById(id);
@@ -133,7 +144,26 @@ public class ProductService {
         return ProductResponse.fromEntity(updatedProduct);
     }
 
-    // Method to check if product is in stock
+    public ProductResponse restoreStock(Long productId, int quantity) {
+        log.info("Restoring stock for product {}, quantity: {}", productId, quantity);
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+
+        product.setStockQuantity(product.getStockQuantity() + quantity);
+
+        // Update status if was out of stock
+        if (product.getStatus() == Product.ProductStatus.OUT_OF_STOCK && product.getStockQuantity() > 0) {
+            product.setStatus(Product.ProductStatus.ACTIVE);
+        }
+
+        Product updatedProduct = productRepository.save(product);
+        log.info("Stock restored successfully. New quantity: {}", updatedProduct.getStockQuantity());
+
+        return ProductResponse.fromEntity(updatedProduct);
+    }
+
+    // Method to check if product is in stock for the order with this quantity
     @Transactional(readOnly = true)
     public boolean isInStock(Long productId, int quantity) {
         Product product = productRepository.findById(productId)

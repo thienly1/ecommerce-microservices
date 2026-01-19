@@ -8,6 +8,7 @@ import com.ecommerce.order_service.dto.OrderResponse;
 import com.ecommerce.order_service.dto.external.ProductResponse;
 import com.ecommerce.order_service.entity.Order;
 import com.ecommerce.order_service.entity.OrderItem;
+import com.ecommerce.order_service.event.OrderEvent;
 import com.ecommerce.order_service.exception.OrderNotFoundException;
 import com.ecommerce.order_service.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserServiceClient userServiceClient;
     private final ProductServiceClient productServiceClient;
+    private final KafkaProducerService kafkaProducerService;
 
     public OrderResponse createOrder(OrderRequest request) {
         log.info("Creating order for user: {}", request.getUserId());
@@ -80,10 +84,35 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Order created with number: {}", savedOrder.getOrderNumber());
 
-        // 6. Reduce stock for each product
-        for (OrderItemRequest item : request.getItems()) {
-            productServiceClient.reduceStock(item.getProductId(), item.getQuantity());
-        }
+        // Publish event to Kafka
+        OrderEvent event = OrderEvent.builder()
+                .orderId(savedOrder.getId())
+                .orderNumber(savedOrder.getOrderNumber())
+                .userId(savedOrder.getUserId())
+                .totalAmount(savedOrder.getTotalAmount())
+                .status(savedOrder.getStatus().name())
+                .shippingAddress(savedOrder.getShippingAddress())
+                .createdAt(savedOrder.getCreatedAt())
+                .items(savedOrder.getItems().stream()
+                        .map(item -> OrderEvent.OrderItemDTO.builder()
+                                .productId(item.getProductId())
+                                .productName(item.getProductName())
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .subtotal(item.getSubtotal())
+                                .build())
+                        .collect(Collectors.toList()))
+                .eventType("ORDER_CREATED")
+                .message("New order created with number: " + savedOrder.getOrderNumber())
+                .eventTimestamp(LocalDateTime.now())
+                .build();
+
+        kafkaProducerService.sendOrderEvent(event);
+
+        // 6. Reduce stock by webclient(send direct to product service
+        //for (OrderItemRequest item : request.getItems()) {
+        //    productServiceClient.reduceStock(item.getProductId(), item.getQuantity());
+        //}
 
         // 7. Update order status to CONFIRMED
         savedOrder.setStatus(Order.OrderStatus.CONFIRMED);
@@ -159,10 +188,40 @@ public class OrderService {
 
         order.setStatus(Order.OrderStatus.CANCELLED);
         Order cancelledOrder = orderRepository.save(order);
-
-        // TODO: Restore product stock (we'll add this with event-driven architecture later)
-
+        //Kafka public event to restore product stock.
+        OrderEvent event = OrderEvent.builder()
+                .orderId(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .items(order.getItems().stream()
+                        .map(item -> OrderEvent.OrderItemDTO.builder()
+                                .productId(item.getProductId())
+                                .quantity(item.getQuantity())
+                                .build())
+                        .collect(Collectors.toList()))
+                .eventType("ORDER_CANCELLED")
+                .message("Order cancelled with order number: " + cancelledOrder.getOrderNumber())
+                .eventTimestamp(LocalDateTime.now())
+                .build();
+        kafkaProducerService.sendOrderEvent(event);
         return OrderResponse.fromEntity(cancelledOrder);
+    }
+    @Transactional(readOnly = true)
+    public boolean hasActiveOrders(Long userId) {
+        List<Order> activeOrders = orderRepository.findByUserId(userId).stream()
+                .filter(order -> order.getStatus() != Order.OrderStatus.CANCELLED
+                        && order.getStatus() != Order.OrderStatus.DELIVERED)
+                .toList();
+        return !activeOrders.isEmpty();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveOrdersForProduct(Long productId) {
+        return orderRepository.findAll().stream()
+                .filter(order -> order.getStatus() != Order.OrderStatus.CANCELLED
+                        && order.getStatus() != Order.OrderStatus.DELIVERED)
+                .anyMatch(order -> order.getItems()
+                        .stream().anyMatch(item -> item.getProductId().equals(productId)));
+
     }
 
     private String generateOrderNumber() {

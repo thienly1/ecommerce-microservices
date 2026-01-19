@@ -56,6 +56,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleServiceUnavailable(ServiceUnavailableException ex) {
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "ODER-SERVICE UNVAILABLE: "+ ex.getMessage(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+    }
+
     // Error response record
     public record ErrorResponse(int status, String message, LocalDateTime timestamp) {}
 }

@@ -146,11 +146,11 @@
 
 ## Security with OAuth2 + JWT
 
-    1. Add the keyCloak configuration to docker-compose.yml then create and run the image by: docker-compose up
-    2. Verify Keycloak is running by open: http//localhost:8180, login as admin: admin
-    3. Configure KeyCloak
+   1. Add the keyCloak configuration to docker-compose.yml then create and run the image by: docker-compose up
+   2. Verify Keycloak is running by open: http//localhost:8180, login as admin: admin
+   3. Configure KeyCloak
         Create a Realm4: Click "Keycloak" dropdown → "Create Realm"
-                         Enter: ecommerce -> Click: Create
+                         Enter: ecommerce -> Click: Create.
         Create a Client (for this application)
             Go to Clients → "Create client"
             General Settings: 
@@ -186,7 +186,7 @@
                 Password: user123
                 Temporary: OFF
                 Click "Save"
-                Go to Role mapping tab → "Assign role" → Select USER
+                Go to Role mapping tab → "Assign role" → Select USER.
             User 2 (Admin):
                 Username: admin
                 Email: admin@test.com
@@ -195,10 +195,10 @@
                 Click "Create"
                 Go to Credentials tab → Set password: admin123
                 Go to Role mapping tab → Assign roles: ROLE_USER and ROLE_ADMIN
-    4. Add Security Dependencies
+   4. Add Security Dependencies
         - Go to start.spring.io, search for 2 dependencies: OAuth2 Resource Server and Spring Security
         - Copy the dependencies to the pom.xml for all services( user-service, product-service, order-service and api-gateway)
-    5. Update Config Repository
+   5. Update Config Repository
         - In the application.yml for all services in github, add OAuth2 Resource Server Configuration to shared config. Note if you have "spring" feature allready, add this to that "spring":
             spring:
               security:
@@ -207,13 +207,13 @@
                     jwt:
                       issuer-uri: http://localhost:8180/realms/ecommerce
                       jwk-set-uri: http://localhost:8180/realms/ecommerce/protocol/openid-connect/certs
-    6. Config all the services:
+   6. Config all the services:
         -Create config folder, implement SecurityConfig and KeycloakRoleConverter to configure security
-    7. Propagate JWT Token Between Services
+   7. Propagate JWT Token Between Services
         When Order Service calls User Service or Product Service, it needs to forward the JWT token.
         Update order-service/src/main/java/com/ecommerce/order_service/config/WebClientConfig.java to all jwt to all requests and handle routes
-    8. Restart All Services
-    9. Test Security
+   8. Restart All Services
+   9. Test Security
         - Test without token: shoudl be 401
         -  Get JWT Token from Keycloak with postman: 
             POST: http://localhost:8180/realms/ecommerce/protocol/openid-connect/token
@@ -228,4 +228,37 @@
         - Go to check urls with USER permit, for example: localhost:8080/api/users
             Authorization -> Bearer Token -> paste token here
             Run the url => It should work now
-        - Test with admin role wtith same logic
+        - Test with admin role with same logic
+## Add WebClient to send order-service to user-service and product-service 
+    - to handle exception before deleting user and product if they are in active orders.
+
+## Add Kafka Broker to microservices
+    Apache Kafka is a distributed event streaming platform that allows services to communicate asynchronously through events.
+    - For example, when an user places an order, it will publish to kafka broker.
+    - If product-service doesn't work so whenever it works, it will get that order to update the stocks (won't break microservices)
+   1. Set up kafka
+    - Update docker-compose.yml file
+    - Run with: docker-compose up -d
+    - check with: docker ps
+    - Open the kafka ui in browser. http://localhost:8090. There is no topic right now.
+   2.  Add Kafka Dependency to Services
+       - Go to start.spring.io, search for Spring for Apache Kafka
+       - Add this dependency to 3 services: user-service, product-service, order-service
+   3. Create Event Models
+          - Note: I will create Publishers to user-service and order-service, so whenever an event is created, it will be published to kafka broker.
+          - Also, product-service will be kafka consumer, it will get event whenever the event is sent to kafka broker from user-service and order-service.
+          product-service will be announced when order created ,... to update quantity of stocks, also, when new user is created, it will be announced
+          to product as well,...
+          - In this project, just emit the event when user created and deleted and order created and deleted
+          - We also can create Publishers or Consumers as we wish.
+          - I also added some services to restore product if order is canceled, and some user preference services
+   4. Rerun with right order
+   5. Test the services
+       - Try to make some requests from POST: http://localhost:8080/api/users and http://localhost:8080/api/orders then check if product-service get those events or not.
+       - Test in kafka ui to see the topics as well.
+   
+
+
+    
+
+

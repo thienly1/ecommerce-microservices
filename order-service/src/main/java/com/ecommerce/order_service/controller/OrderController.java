@@ -65,4 +65,15 @@ public class OrderController {
         OrderResponse response = orderService.cancelOrder(id);
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/user/{userId}/has-active")
+    public ResponseEntity<Boolean> hasActiveOrders(@PathVariable Long userId) {
+        boolean hasActive = orderService.hasActiveOrders(userId);
+        return ResponseEntity.ok(hasActive);
+    }
+
+    @GetMapping("/product/{productId}/has-active")
+    public ResponseEntity<Boolean> hasActiveOrdersForProduct(@PathVariable Long productId) {
+        boolean hasActive = orderService.hasActiveOrdersForProduct(productId);
+        return ResponseEntity.ok(hasActive);
+    }
 }
